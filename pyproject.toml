@@ -1,0 +1,6 @@
+[project]
+name = "aseneb"
+version = "0.1.0"
+
+[project.scripts]
+aseneb = "aseneb.cli:main"

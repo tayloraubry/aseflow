@@ -1,0 +1,2 @@
+[console_scripts]
+aseneb = aseneb.cli:main
