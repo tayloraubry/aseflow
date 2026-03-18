@@ -1,2 +1,3 @@
 [console_scripts]
 aseneb = aseneb.cli:main
+getenergies = aseneb.getenergies:main

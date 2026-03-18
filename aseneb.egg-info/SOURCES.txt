@@ -1,9 +1,11 @@
+LICENSE
+README.md
 pyproject.toml
-aseneb/__init__.py
 aseneb/cli.py
 aseneb/config.py
 aseneb/config_io.py
 aseneb/dft_runner.py
+aseneb/getenergies.py
 aseneb/interpolate.py
 aseneb/mace_runner.py
 aseneb/workflow.py

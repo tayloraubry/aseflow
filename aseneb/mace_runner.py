@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from ase.io import read
+from ase.io import read, write
 from ase.mep import NEB
 from ase.optimize import BFGS, BFGSLineSearch, LBFGS, LBFGSLineSearch, GPMin, MDMin, FIRE
 from mace.calculators import MACECalculator
@@ -47,6 +47,38 @@ class MACERunner:
                 head="default",
                 default_dtype="float64",
             )
+
+    def optimize_structure(self, infile, outfile=None):
+        infile = Path(infile)
+        outfile = Path(outfile) if outfile else infile
+
+        atoms = read(infile)
+
+        atoms.calc = MACECalculator(
+            model_paths=str(self.cfg.calculator.model),
+            device=self.cfg.calculator.device,
+            head="default",
+            default_dtype="float64",
+        )
+
+        opt_cls = OPTIMIZERS[self.cfg.optimizer.name]
+
+        opt = opt_cls(
+            atoms,
+            logfile=f"{infile.stem}_opt.log",
+            trajectory=f"{infile.stem}_opt.traj",
+        )
+
+        opt.run(
+            fmax=self.cfg.optimizer.fmax,
+            steps=self.cfg.optimizer.steps,
+        )
+
+        write(outfile, atoms, format="vasp", direct=True)
+
+        print(f"Optimized {infile} → {outfile}")
+
+        return outfile
 
     def run(self):
         images = self.load_images()

@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--dft-config")
 
     parser.add_argument("--interpolate", type=int, help="If present, number of NEB images to interpolate from initial.vasp and final.vasp")
+    parser.add_argument("--maceopt", action="store_true",help="Optimize initial/final with MACE before interpolation")
 
     parser.add_argument("--run-neb", choices=["mace", "dft"], help="Which NEB backend to run")
 
@@ -25,8 +26,11 @@ def main():
 
     wf = Workflow(neb_cfg, dft_cfg)
 
+    if args.maceopt and not neb_cfg:
+        parser.error("--maceopt requires --neb-config")
+
     if args.interpolate:
-        wf.interpolate(args.interpolate)
+        wf.interpolate(args.interpolate,mace_optimize=args.maceopt)
 
     if args.run_neb == "mace":
         wf.run_mace_neb()

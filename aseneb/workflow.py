@@ -9,12 +9,41 @@ class Workflow:
         self.mace_runner = MACERunner.from_config(neb_cfg) 
         self.dft_runner = DFTRunner(dft_cfg) if dft_cfg else None
 
-    def interpolate(self, n_images: int, initial="initial.vasp", final="final.vasp"):
+    def interpolate(
+        self,
+        n_images: int,
+        initial="initial.vasp",
+        final="final.vasp",
+        mace_optimize=False,
+    ):
+        initial_path = Path(initial)
+        final_path = Path(final)
+
+        if mace_optimize:
+
+            initial_opt = initial_path.with_name(
+                initial_path.stem + "_opt.vasp"
+            )
+
+            final_opt = final_path.with_name(
+                final_path.stem + "_opt.vasp"
+            )
+
+            initial_path = self.mace_runner.optimize_structure(
+                infile=initial_path,
+                outfile=initial_opt,
+            )
+
+            final_path = self.mace_runner.optimize_structure(
+                infile=final_path,
+                outfile=final_opt,
+            )
+
         interpolate_images(
-            initial_path=Path(initial),
-            final_path=Path(final),
+            initial_path=initial_path,
+            final_path=final_path,
             workdir=Path("."),
-            n_images=n_images
+            n_images=n_images,
         )
 
     def run_mace_neb(self):
