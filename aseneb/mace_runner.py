@@ -44,7 +44,7 @@ class MACERunner:
                 model_paths=str(self.cfg.calculator.model),
                 device=self.cfg.calculator.device,
                 outfile=str(folder),
-                head="default",
+                head = self.cfg.calculator.head,
                 default_dtype="float64",
             )
 
@@ -57,7 +57,7 @@ class MACERunner:
         atoms.calc = MACECalculator(
             model_paths=str(self.cfg.calculator.model),
             device=self.cfg.calculator.device,
-            head="default",
+            head = self.cfg.calculator.head,
             default_dtype="float64",
         )
 

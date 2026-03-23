@@ -1,3 +1,11 @@
+import os
+os.environ["PYTHONWARNINGS"] = "ignore"
+import warnings
+warnings.filterwarnings("ignore", message=".*TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD.*")
+warnings.filterwarnings("ignore", message=".*torch.jit.load is deprecated.*")
+warnings.filterwarnings("ignore", message=".*default method has changed.*")  # the NEB one
+warnings.filterwarnings("ignore", category=UserWarning, module="mace")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="torch")
 from pathlib import Path
 import re
 import shutil

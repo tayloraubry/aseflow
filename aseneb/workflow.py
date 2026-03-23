@@ -2,7 +2,6 @@ from aseneb.mace_runner import MACERunner
 from aseneb.dft_runner import DFTRunner
 from aseneb.interpolate import interpolate_images
 from pathlib import Path
-import warnings
 
 class Workflow:
     def __init__(self, neb_cfg, dft_cfg=None):

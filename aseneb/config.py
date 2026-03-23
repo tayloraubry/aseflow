@@ -25,6 +25,7 @@ class CalculatorConfig:
     type: str
     model: Optional[str] = None
     device: Optional[str] = None
+    head: str = "default"
 
 @dataclass
 class RunConfig:

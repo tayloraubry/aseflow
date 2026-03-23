@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-import warnings
-warnings.filterwarnings("ignore", message=".*TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD.*")
+import os
+os.environ["PYTHONWARNINGS"] = "ignore"
 import argparse
 from aseneb.config_io import load_config
 from aseneb.workflow import Workflow
+
 
 def main():
     parser = argparse.ArgumentParser("NEB  MACE/DFT workflow driver")
