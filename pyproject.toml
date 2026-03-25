@@ -5,3 +5,4 @@ version = "0.2.0"
 [project.scripts]
 aseneb = "aseneb.cli:main"
 getenergies = "aseneb.getenergies:main"
+cont2jdft = "aseneb.helper_scripts.cont2jdft:main"

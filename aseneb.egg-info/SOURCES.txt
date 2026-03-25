@@ -14,3 +14,6 @@ aseneb.egg-info/SOURCES.txt
 aseneb.egg-info/dependency_links.txt
 aseneb.egg-info/entry_points.txt
 aseneb.egg-info/top_level.txt
+aseneb/helper_scripts/__init__.py
+aseneb/helper_scripts/analyze4.py
+aseneb/helper_scripts/cont2jdft.py

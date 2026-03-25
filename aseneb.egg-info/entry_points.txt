@@ -1,3 +1,4 @@
 [console_scripts]
 aseneb = aseneb.cli:main
+cont2jdft = aseneb.helper_scripts.cont2jdft:main
 getenergies = aseneb.getenergies:main
