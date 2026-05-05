@@ -4,5 +4,8 @@ version = "0.2.0"
 
 [project.scripts]
 aseneb = "aseneb.cli:main"
-getenergies = "aseneb.getenergies:main"
+aseneb-analyze = "aseneb.analysis_cli:main"
+aseneb-plot-barriers = "aseneb.plot_cli:main"
+
+getenergies = "aseneb.helper_scripts.getenergies:main"
 cont2jdft = "aseneb.helper_scripts.cont2jdft:main"
