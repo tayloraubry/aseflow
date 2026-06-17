@@ -2,9 +2,9 @@
 CLI entry point for NEB postprocessing.
 
 Usage:
-    nebpost --base-path folder/ --pattern "C10-ZnN4C*"
-    nebpost --pattern "C10*" --no-plots --create-movie
-    nebpost --help
+    aseneb-analyze --base-path folder/ --pattern "C10-ZnN4C*"
+    aseneb-analyze --pattern "C10*" --no-plots --create-movie
+    aseneb-analyze --help
 """
 
 import argparse

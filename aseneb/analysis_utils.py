@@ -958,12 +958,20 @@ def run_neb_analysis(
 
                 plot_final_path(folder, rel_energies, barrier, delta_E, rmse, avg_bias, converged=converged, plot_dft=dft_overlay)
 
-                forcefit = fit_images(final_images)
-                plot_final_fitted_path(folder, n_images, forcefit, barrier, delta_E, plot_dft=dft_overlay)
+                try:
+                    forcefit = fit_images(final_images)
+                except np.linalg.LinAlgError as e:
+                    print(f"WARNING: Skipping MLIP fit for {folder}: singular matrix ({e})")
+                    forcefit = None
+
+                if forcefit is not None:
+                    plot_final_fitted_path(folder,n_images,forcefit,barrier,delta_E,plot_dft=dft_overlay)
+                else:
+                    print(f"Skipping fitted-path plot for {folder} (no valid forcefit)")
 
             # ---------------- STRUCTURES AND MOVIES ----------------
             if do_write_structures:
-                write_structures(folder, traj, n_steps, n_images)
+                write_structures(folder, traj, n_steps, n_images, maceopt_endpoints)
 
             if do_write_movie:
                 create_movie(folder, n_steps, n_images)
