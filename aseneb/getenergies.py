@@ -10,7 +10,7 @@ import os, sys
 import argparse
 import glob
 import pandas as pd
-
+import numpy as np
 
 def check_converged(filename):
     LM = False
@@ -133,10 +133,16 @@ def main():
         os.chdir(directory + '/' + str(subdir) + '/')
 
         name = pd.Series({'Calculation': directory})
-        converged = check_converged(filename)
-        energies = get_energies(filename)
-        nelec = get_nelectrons(filename)
-        ionic_steps = get_ionic_steps(filename)
+        if os.path.exists(filename):
+            converged = check_converged(filename)
+            energies = get_energies(filename)
+            nelec = get_nelectrons(filename)
+            ionic_steps = get_ionic_steps(filename)
+        else:
+            converged = pd.Series({'LM': np.nan, 'IM': np.nan, 'EM': np.nan})
+            energies = pd.Series({'E': np.nan, 'F': np.nan, 'G': np.nan})
+            nelec = pd.Series({'nE': np.nan})
+            ionic_steps = pd.Series({'IonicSteps': np.nan})
 
         if vibfile is not None:
             vib_components = get_vib_components(vibfile)
