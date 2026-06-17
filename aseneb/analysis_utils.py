@@ -142,28 +142,16 @@ def get_jdftx_data(folder,n_images):
     for i in range(1, n_images+1):
         d = f'{i:02}'
         filename = f'{folder}/{d}/out'
-
-        if not os.path.exists(filename):
-            print(f"WARNING: Missing JDFTx out file: {filename} (skipping)")
-            all_converged = False
-            continue
-
-        try:
-            out = JDFTXOutfile.from_file(filename)
-        except Exception as exc:
-            print(f"WARNING: Failed to parse JDFTx out file: {filename} ({exc}) (skipping)")
-            all_converged = False
-            continue
-
-        atoms = AseAtomsAdaptor.get_atoms(out.structure)
+        out = JDFTXOutfile.from_file(filename)
+        atoms = AseAtomsAdaptor.get_atoms(out.structure)        
         atoms.calc = SinglePointCalculator(
             atoms,
             energy=out.e,
             forces=out.forces)
         atoms_jdftx.append(atoms)
-
         if not out.converged:
             all_converged = False
+    return atoms_jdftx, all_converged
 
     return atoms_jdftx, all_converged
 
@@ -343,6 +331,7 @@ def plot_optimization(folder, traj, n_images, barrier, delta_E, max_steps, step_
 
     plt.tight_layout()
     plt.savefig(f"{folder}.png", dpi=300)
+    plt.close()
 
 def plot_final_path(folder, rel_energies, barrier, delta_E, rmse, bias, converged, plot_dft=False):
 
@@ -423,15 +412,105 @@ def plot_final_path(folder, rel_energies, barrier, delta_E, rmse, bias, converge
     ax.legend(loc="best")
     plt.tight_layout()
     plt.savefig(f"{folder}_finalpath.png", dpi=300)
+    plt.close()
 
-def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, rmse, bias, plot_dft=False):
+def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, plot_dft=False):
+    """
+    Plot NEB final path with optional overlay of DFT energies from energies.csv.
 
+    Parameters
+    ----------
+    folder : str
+        Path to NEB folder (should contain energies.csv if plot_dft=True)
+    rel_energies : np.ndarray
+        NEB energies relative to initial image (in eV)
+    barrier : float
+        Barrier along path (in eV)
+    delta_E : float
+        Energy difference (final - initial) (in eV)
+    c : matplotlib color, optional
+        Line color for NEB energies
+    plot_dft : bool, default False
+        If True, overlay DFT energies from energies.csv
+    hartree_to_ev : float, default 27.2114
+        Conversion factor from Hartree to eV for DFT energies
+    """
     name = get_reaction_name(folder)
 
     fig, ax = plt.subplots(figsize=(8, 4))
 
     lines = []
     labels = []
+
+    if plot_dft:
+
+        dft_energies = []
+
+        try:
+            atoms_jdftx, all_converged = get_jdftx_data(folder, n_images)
+            dft_forcefit = fit_images(atoms_jdftx)
+
+            dft_path = dft_forcefit.path
+            dft_energies = dft_forcefit.energies
+            dft_fit_path = dft_forcefit.fit_path
+            dft_fit_energies = dft_forcefit.fit_energies
+
+            line1, = ax.plot(
+                np.array(dft_path) + 1,
+                dft_energies,
+                marker='o',
+                color='dimgray',
+                linewidth=0,
+                markersize=8,
+                alpha=0.6,
+                zorder=6
+            )
+
+            for x, y in dft_forcefit.lines:
+                ax.plot(
+                    np.array(x) + 1,
+                    y,
+                    color='darkgrey',
+                    marker=None,
+                    linewidth=1.5,
+                    zorder=4
+                )
+
+            ax.plot(
+                np.array(dft_fit_path) + 1,
+                dft_fit_energies,
+                color='dimgray',
+                marker=None,
+                linewidth=2,
+                zorder=5
+            )
+
+            for xi, yi in zip(dft_path, dft_energies):
+                ax.text(
+                    np.array(xi) + 1,
+                    yi + 0.015,
+                    f"{yi:.2f}",
+                    ha="center",
+                    fontsize=10,
+                    color="k",
+                    zorder=8
+                )
+
+            lines.append(line1)
+            labels.append('DFT')
+
+        except np.linalg.LinAlgError as e:
+            print(f"WARNING: Skipping DFT overlay for {folder}")
+            print(f"         ASE fit_images failed with singular matrix: {e}")
+
+        except Exception as e:
+            print(f"WARNING: Failed to generate DFT overlay for {folder}")
+            print(f"         {type(e).__name__}: {e}")
+
+    else:
+        dft_energies = []
+
+    '''
     # Optionally overlay DFT energies
     if plot_dft:
 
@@ -453,17 +532,8 @@ def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, rm
 
         lines.append(line1)
         labels.append('DFT')
-
-        ax.text(
-        0.8,
-        0.95,
-        f"rmse: {rmse:.2f} eV\nbias: {bias:.2f} eV",
-        transform=ax.transAxes,
-        verticalalignment="top",
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.3", alpha=0.8),
-        fontsize=12,
-        )
-
+    '''
+        
     mlip_path = mlip_forcefit.path  # the points themselves (relative energy)
     mlip_energies = mlip_forcefit.energies
     mlip_fit_path = mlip_forcefit.fit_path  # the fitted interpolation (relative energy)
@@ -490,25 +560,11 @@ def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, rm
     # Extend y-axis max slightly to make room for point labels
     energies_for_limits = list(mlip_energies)
     energies_for_limits.extend(dft_energies)
-    '''
     y_min, y_max = np.nanmin(energies_for_limits), np.nanmax(energies_for_limits)
     y_range = y_max - y_min
     pad_top = 0.10 * y_range if y_range > 0 else 0.2
     ax.set_ylim(bottom=ax.get_ylim()[0], top=y_max + pad_top)
-    '''
-    y_min = np.nanmin(energies_for_limits)
-    y_max = np.nanmax(energies_for_limits)
-    y_range = y_max - y_min
-
-    if y_range == 0:
-        pad = 0.2
-    else:
-        pad = 0.10 * y_range
-
-    ax.set_ylim(y_min - pad, y_max + pad)
     ax.set_xlim(left=0)
-
-
     
     ax.text(
         0.02,
@@ -519,10 +575,11 @@ def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, rm
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.3", alpha=0.8),
         zorder=10,
     )
-
     ax.axhline(y=0, color='lightgrey', linewidth=1, zorder=1)
     
     plt.savefig(f"{folder}_finalfittedpath.png", dpi=300)
+    plt.close()
+
 
 
 # ============================== XYZ SNAPSHOTS AND MOVIE ==============================
@@ -639,16 +696,30 @@ def create_movie(folder, n_steps, n_images):
         rotation=(-90, 0, 0),
         zoom=1,
         dpi_level=3,
-        png_crop_window=(0.37, 0.63, 0.3, 0.7),
+        #png_crop_window=(0.37, 0.63, 0.3, 0.7),
         png_scale=0.5,
         vesta_render_stall=3,
     )
 
     V.create_movie(
-        str(Path(folder) / "movie.gif"),
+        str(Path(folder) / "pathway_sideview.gif"),
         delay=500,
     )
 
+    V.create_pngs(
+        skip_existing_pngs=False,
+        rotation=(0, 0, 0),
+        zoom=1,
+        dpi_level=3,
+        #png_crop_window=(0.37, 0.63, 0.3, 0.7),
+        png_scale=0.5,
+        vesta_render_stall=3,
+    )
+
+    V.create_movie(
+        str(Path(folder) / "pathway_topview.gif"),
+        delay=500,
+    )
 # ============================== SUMMARY SHEETS AND PLOTS ==============================
 
 def process_summary(base_path, max_steps):
@@ -817,7 +888,7 @@ def plot_barriers(
 
     plt.tight_layout()
     plt.savefig(outfile, dpi=200)
-    plt.show()
+    plt.close()
 
 # ============================== MAIN CONTROL FUNCTION ==============================
 
@@ -888,7 +959,7 @@ def run_neb_analysis(
                 plot_final_path(folder, rel_energies, barrier, delta_E, rmse, avg_bias, converged=converged, plot_dft=dft_overlay)
 
                 forcefit = fit_images(final_images)
-                plot_final_fitted_path(folder, n_images, forcefit, barrier, delta_E, rmse, avg_bias, plot_dft=dft_overlay)
+                plot_final_fitted_path(folder, n_images, forcefit, barrier, delta_E, plot_dft=dft_overlay)
 
             # ---------------- STRUCTURES AND MOVIES ----------------
             if do_write_structures:

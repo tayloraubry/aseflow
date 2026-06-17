@@ -1,5 +1,5 @@
 import argparse
-from .analysis import process_summary, plot_barriers
+from .analysis_utils import process_summary, plot_barriers
 
 
 def main():
