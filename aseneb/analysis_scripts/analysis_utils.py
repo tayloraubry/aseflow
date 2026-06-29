@@ -414,6 +414,236 @@ def plot_final_path(folder, rel_energies, barrier, delta_E, rmse, bias, converge
     plt.savefig(f"{folder}_finalpath.png", dpi=300)
     plt.close()
 
+    ''' SB Numerical Stuff and Saving '''
+    # Construct the array to be saved
+    folder_name = os.path.basename(folder.rstrip("/"))
+    # Flatten to one row so the folder label can sit beside the data
+    relative_diffs = np.concatenate([rel_energies, rel_dft], axis=0)
+    # Find n_images
+    n_images = len(rel_energies)
+
+    # Compute forward numerical gradients
+    grad_mace = rel_energies[1:] - rel_energies[:-1]
+    grad_dft = rel_dft[1:] - rel_dft[:-1]
+
+    # Find potential TS indices by examining consecutive grad values
+    maxima_idx_mace = np.where((grad_mace[:-1] > 0) & (grad_mace[1:] < 0))[0] + 1
+    n_maxima_mace = len(maxima_idx_mace)
+    maxima_idx_dft = np.where((grad_dft[:-1] > 0) & (grad_dft[1:] < 0))[0] + 1
+    n_maxima_dft = len(maxima_idx_dft)
+
+    # Determine simple barrier heights from prior minima to TSs
+    lhs_minima_mace = []
+    lhs_minima_mace_idx = []
+    mace_barriers = []
+
+    for idx, ts in enumerate(maxima_idx_mace):
+        # Determine left side minima bounds
+        if idx == 0:
+            bound_1_idx = 0
+        else:
+            bound_1_idx = maxima_idx_mace[idx - 1]
+
+        bound_2_idx = ts
+
+        # Region excludes current TS, includes previous TS if idx > 0
+        region = rel_energies[bound_1_idx:bound_2_idx]
+
+        # Safety check
+        if len(region) == 0:
+            lhs_minima_mace.append(np.nan)
+            lhs_minima_mace_idx.append(-1)
+            mace_barriers.append(np.nan)
+            continue
+
+        # Local minimum between bounds
+        local_min_rel_idx = np.argmin(region)
+        local_min_idx = bound_1_idx + local_min_rel_idx
+        local_min_energy = rel_energies[local_min_idx]
+
+        lhs_minima_mace.append(local_min_energy)
+        lhs_minima_mace_idx.append(local_min_idx)
+
+        # Barrier from left-side minimum to TS
+        mace_barriers.append(rel_energies[ts] - local_min_energy)
+
+
+    # Determine simple barrier heights from prior minima to DFT TSs
+    lhs_minima_dft = []
+    lhs_minima_dft_idx = []
+    dft_barriers = []
+
+    for idx, ts in enumerate(maxima_idx_dft):
+        # Determine left side minima bounds
+        if idx == 0:
+            bound_1_idx = 0
+        else:
+            bound_1_idx = maxima_idx_dft[idx - 1]
+
+        bound_2_idx = ts
+
+        # Region excludes current TS, includes previous TS if idx > 0
+        region = rel_dft[bound_1_idx:bound_2_idx]
+
+        # Safety check
+        if len(region) == 0:
+            lhs_minima_dft.append(np.nan)
+            lhs_minima_dft_idx.append(-1)
+            dft_barriers.append(np.nan)
+            continue
+
+        # Local minimum between bounds
+        local_min_rel_idx = np.argmin(region)
+        local_min_idx = bound_1_idx + local_min_rel_idx
+        local_min_energy = rel_dft[local_min_idx]
+
+        lhs_minima_dft.append(local_min_energy)
+        lhs_minima_dft_idx.append(local_min_idx)
+
+        # Barrier from left-side minimum to TS
+        dft_barriers.append(rel_dft[ts] - local_min_energy)
+
+
+    # Error metrics
+    energy_mae = np.mean(np.abs(rel_energies - rel_dft))
+    energy_rmse = np.sqrt(np.mean((rel_energies - rel_dft)**2))
+    max_abs_error = np.max(np.abs(rel_energies - rel_dft))
+
+    # Compare MACE and DFT TS indices
+    maxima_idx_mace = np.asarray(maxima_idx_mace)
+    maxima_idx_dft = np.asarray(maxima_idx_dft)
+
+    mace_barriers = np.asarray(mace_barriers)
+    dft_barriers = np.asarray(dft_barriers)
+
+    # Shared TS image indices
+    matching_ts_idx = np.intersect1d(maxima_idx_mace, maxima_idx_dft)
+
+    n_matching_ts = len(matching_ts_idx)
+
+    # For each matching TS, compare MACE and DFT barrier heights
+    matching_barrier_diffs = []
+
+    for ts in matching_ts_idx:
+        mace_pos = np.where(maxima_idx_mace == ts)[0][0]
+        dft_pos = np.where(maxima_idx_dft == ts)[0][0]
+
+        barrier_diff = mace_barriers[mace_pos] - dft_barriers[dft_pos]
+
+        matching_barrier_diffs.append(barrier_diff)
+
+    matching_barrier_diffs = np.asarray(matching_barrier_diffs)
+
+    ts_match_tol = 1
+
+    near_matches = []
+
+    for mace_i, mace_ts in enumerate(maxima_idx_mace):
+        if len(maxima_idx_dft) == 0:
+            continue
+
+        dists = np.abs(maxima_idx_dft - mace_ts)
+        closest_dft_pos = np.argmin(dists)
+
+        if dists[closest_dft_pos] <= ts_match_tol:
+            dft_ts = maxima_idx_dft[closest_dft_pos]
+            barrier_diff = mace_barriers[mace_i] - dft_barriers[closest_dft_pos]
+
+            near_matches.append({
+                "mace_ts": int(mace_ts),
+                "dft_ts": int(dft_ts),
+                "idx_diff": int(mace_ts - dft_ts),
+                "barrier_diff": float(barrier_diff),
+                "abs_barrier_diff": float(abs(barrier_diff)),
+            })
+
+
+    # Determine if energy decreases before the first maxima
+    if n_maxima_mace > 0:
+        start_not_minima = bool(np.any(rel_energies[:maxima_idx_mace[0]] < 0))
+    else:
+        start_not_minima = False
+
+    def clean_for_json(x):
+        """
+        Convert numpy types/arrays and NaN/inf values into JSON-safe Python objects.
+        """
+        if isinstance(x, np.ndarray):
+            return [clean_for_json(v) for v in x.tolist()]
+
+        if isinstance(x, (list, tuple)):
+            return [clean_for_json(v) for v in x]
+
+        if isinstance(x, dict):
+            return {k: clean_for_json(v) for k, v in x.items()}
+
+        if isinstance(x, (np.integer,)):
+            return int(x)
+
+        if isinstance(x, (np.floating,)):
+            if np.isnan(x) or np.isinf(x):
+                return None
+            return float(x)
+
+        if isinstance(x, float):
+            if np.isnan(x) or np.isinf(x):
+                return None
+            return x
+
+        if isinstance(x, (np.bool_,)):
+            return bool(x)
+
+        return x
+
+    record = {
+    "folder": folder_name,
+    "n_images": n_images,
+
+    # Raw numerical profiles
+    "rel_mace": rel_energies,
+    "rel_dft": rel_dft,
+    "grad_mace": grad_mace,
+    "grad_dft": grad_dft,
+
+    # Maxima / TS info
+    "n_maxima_mace": n_maxima_mace,
+    "maxima_idx_mace": maxima_idx_mace,
+    "n_maxima_dft": n_maxima_dft,
+    "maxima_idx_dft": maxima_idx_dft,
+
+    # Left-side minima and barriers
+    "lhs_minima_mace": lhs_minima_mace,
+    "lhs_minima_mace_idx": lhs_minima_mace_idx,
+    "mace_barriers": mace_barriers,
+
+    "lhs_minima_dft": lhs_minima_dft,
+    "lhs_minima_dft_idx": lhs_minima_dft_idx,
+    "dft_barriers": dft_barriers,
+
+    # Energy error metrics
+    "energy_mae": energy_mae,
+    "energy_rmse": energy_rmse,
+    "max_abs_error": max_abs_error,
+
+    # Exact TS matches
+    "n_matching_ts": n_matching_ts,
+    "matching_ts_idx": matching_ts_idx,
+    "matching_barrier_diffs": matching_barrier_diffs,
+
+    # Near TS matches
+    "ts_match_tol": ts_match_tol,
+    "n_near_matching_ts": len(near_matches),
+    "near_matches": near_matches,
+
+    # Qualitative flags
+    "start_not_minima": start_not_minima,
+    }
+
+    out_path = os.path.join(folder, "neb_metrics.jsonl")
+
+    with open(out_path, "w") as f:
+        f.write(json.dumps(clean_for_json(record)) + "\n")
+
 def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, plot_dft=False):
     """
     Plot NEB final path with optional overlay of DFT energies from energies.csv.
@@ -583,97 +813,42 @@ def plot_final_fitted_path(folder, n_images, mlip_forcefit, barrier, delta_E, pl
 
 
 # ============================== XYZ SNAPSHOTS AND MOVIE ==============================
-'''
-def write_snapshots(folder, traj, n_steps, n_images, maceopt_endpoints):
-
-    save_dir = os.path.join(folder, "xyz_snapshots")
-    os.makedirs(save_dir, exist_ok=True)
-
-    if maceopt_endpoints:
-
-        # Load endpoints
-        initial = read(os.path.join(folder, "initial_opt.vasp"))
-        final = read(os.path.join(folder, "final_opt.vasp"))
-
-        final_step = n_steps - 1
-
-        # INITIAL OPT STEP
-
-        # Endpoints
-        write(os.path.join(save_dir, "step0000_img01.xyz"), initial, write_results=False)
-        write(os.path.join(save_dir, f"step0000_img{n_images:02d}.xyz"), final, write_results=False)
-
-        # Intermediates
-        for i in range(1, n_images - 1):
-            write(
-                os.path.join(save_dir, f"step0000_img{i+1:02d}.xyz"),
-                traj[i - 1],
-                write_results=False
-            )
-
-        # FINAL OPT STEP
-
-        # Endpoints
-        write(os.path.join(save_dir, f"step{final_step:04d}_img01.xyz"), initial, write_results=False)
-        write(os.path.join(save_dir, f"step{final_step:04d}_img{n_images:02d}.xyz"), final, write_results=False)
-
-        # Intermediates
-        for i in range(1, n_images - 1):
-            idx = final_step * (n_images - 2) + (i - 1)
-            write(
-                os.path.join(save_dir, f"step{final_step:04d}_img{i+1:02d}.xyz"),
-                traj[idx],
-                write_results=False
-            )
-    else:
-        # Initial path
-        for i in range(n_images)[1:-1]:
-            write(
-                os.path.join(save_dir, f"step0000_img{i:02d}.xyz"),
-                traj[i],
-            )
-
-        # Final path
-        for i in range(n_images)[1:-1]:
-            idx = (n_steps - 1) * n_images + i
-            write(
-                os.path.join(save_dir, f"step{n_steps-1:04d}_img{i:02d}.xyz"),
-                traj[idx],
-            )
-''' 
 def write_structures(folder, traj, n_steps, n_images, maceopt_endpoints):
     save_dir = os.path.join(folder, "xyz_snapshots")
     os.makedirs(save_dir, exist_ok=True)
 
-    # 1. Pre-load endpoints if using MACE optimization
+    # 1. Pre-load optimized endpoints (with energies and forces)
     endpoints = None
     if maceopt_endpoints:
         endpoints = {
-            1: read(os.path.join(folder, "initial_opt.vasp")),
-            n_images: read(os.path.join(folder, "final_opt.vasp"))
+            1: read(os.path.join(folder, "initial_opt.traj")),
+            n_images: read(os.path.join(folder, "final_opt.traj"))
         }
 
-    # 2. Iterate through the relevant steps (Initial and Final)
+    # 2. Write the initial and final NEB iterations
     for step_idx in [0, n_steps - 1]:
         prefix = f"step{step_idx:04d}"
-        
+
         for i in range(1, n_images + 1):
             filename = os.path.join(save_dir, f"{prefix}_img{i:02d}.xyz")
-            
+
             if maceopt_endpoints:
-                # Handle endpoints from files
+                # Use optimized endpoint structures
                 if i in endpoints:
-                    write(filename, endpoints[i], write_results=False)
+                    atoms = endpoints[i]
                 else:
-                    # Intermediate trajectory index
+                    # Intermediate images from the NEB trajectory
                     traj_idx = step_idx * (n_images - 2) + (i - 2)
-                    write(filename, traj[traj_idx], write_results=False)
-            
+                    atoms = traj[traj_idx]
             else:
-                # Original "else" logic: only write intermediates (skipping 1 and n_images)
-                if 1 < i < n_images:
-                    traj_idx = step_idx * n_images + (i - 1)
-                    write(filename, traj[traj_idx])
+                # Original indexing when endpoints are included in the trajectory
+                if not (1 < i < n_images):
+                    continue
+                traj_idx = step_idx * n_images + (i - 1)
+                atoms = traj[traj_idx]
+
+            # Write energies and forces if present
+            write(filename, atoms, format="extxyz")
 
 def create_movie(folder, n_steps, n_images):
     snapshot_dir = Path(folder) / "xyz_snapshots"

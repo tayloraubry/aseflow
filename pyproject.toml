@@ -1,11 +1,12 @@
 [project]
 name = "aseneb"
-version = "0.3.0"
+version = "0.4.0"
 
 [project.scripts]
 aseneb = "aseneb.cli:main"
-aseneb-analyze = "aseneb.analysis_cli:main"
-aseneb-plot-barriers = "aseneb.plot_cli:main"
+aseneb-analyze = "aseneb.analysis_scripts.analysis_cli:main"
+aseneb-plot-barriers = "aseneb.analysis_scripts.plot_cli:main"
+aseneb-make-summary-plots = "aseneb.analysis_scripts.make_figure_comparison:main"
 
 getenergies = "aseneb.helper_scripts.getenergies:main"
 cont2jdft = "aseneb.helper_scripts.cont2jdft:main"
