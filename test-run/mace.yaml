@@ -1,0 +1,15 @@
+neb:
+  method: improvedtangent
+  climb: false
+  k: 0.1
+
+optimizer:
+  name: FIRE
+  fmax: 0.1
+  steps: 500
+
+calculator:
+  type: mace
+  model: mace-fenc-finetuned-mh1.model
+  device: cuda
+

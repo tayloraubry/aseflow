@@ -1,0 +1,7 @@
+# =============================================================================
+# PLACEHOLDER DFT INPUT FILE — NOT A REAL CALCULATION
+#
+# This file is a stand-in for a real DFT input (e.g. JDFTx, VASP, QE).
+# The accompanying run_dft.sh uses MACE + 1% Gaussian noise instead of DFT.
+# Replace this file and run_dft.sh with real DFT inputs before production use.
+# =============================================================================
