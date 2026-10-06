@@ -377,7 +377,7 @@ def plot_final_path(folder, rel_energies, barrier, delta_E, rmse, bias, converge
             colors = ["#9fb6d5" if val else "red" for val in im_series]
             for xi, yi, col in zip(x_dft, rel_dft, colors):
                 ax.scatter(xi, yi, color=col, s=36)
-                ax.text(xi, yi + 0.015, f"{yi:.2f}", ha="center", fontsize=10, color="k")
+                ax.text(xi, yi + 0.015, f"{yi:.2f}", ha="center", fontsize=10, color='k')
 
             ax.text(0.8,0.95,
                 f"rmse: {rmse:.2f} eV\nbias: {bias:.2f} eV",
@@ -414,6 +414,9 @@ def plot_final_path(folder, rel_energies, barrier, delta_E, rmse, bias, converge
     plt.tight_layout()
     plt.savefig(f"{folder}_finalpath.png", dpi=300)
     plt.close()
+
+    if not plot_dft:
+        return
 
     ''' SB Numerical Stuff and Saving '''
     # Construct the array to be saved
@@ -708,6 +711,7 @@ def plot_final_fitted_path(
                 zorder=6
             )
 
+            # Plot tangent lines for DFT fit
             for x, y in dft_forcefit.lines:
                 ax.plot(
                     np.array(x) + 1,
@@ -739,7 +743,7 @@ def plot_final_fitted_path(
                 )
 
             lines.append(line1)
-            labels.append('DFT')
+            labels.append('DFT@MLIP')
 
         except np.linalg.LinAlgError as e:
             print(f"WARNING: Skipping DFT overlay for {folder}")
@@ -751,35 +755,12 @@ def plot_final_fitted_path(
 
     else:
         dft_energies = []
-
-    '''
-    # Optionally overlay DFT energies
-    if plot_dft:
-
-        atoms_jdftx, all_converged = get_jdftx_data(folder, n_images)
-        dft_forcefit = fit_images(atoms_jdftx)
-        dft_path = dft_forcefit.path  # the points themselves (relative energy)
-        dft_energies = dft_forcefit.energies
-        dft_fit_path = dft_forcefit.fit_path  # the fitted interpolation (relative energy)
-        dft_fit_energies = dft_forcefit.fit_energies
-
-        line1, = ax.plot(np.array(dft_path)+1, dft_energies, marker='o', 
-                         color='dimgray', linewidth=0, markersize=8, alpha=0.6, zorder=6)
-        for x, y in dft_forcefit.lines:  # force tangent lines
-            ax.plot(np.array(x)+1, y, color='darkgrey', marker=None, linewidth=1.5, zorder=4)
-        ax.plot(np.array(dft_fit_path)+1, dft_fit_energies, color='dimgray', marker=None, linewidth=2, zorder=5)
-
-        for xi, yi in zip(dft_path, dft_energies):
-            ax.text(np.array(xi)+1, yi + 0.015, f"{yi:.2f}", ha="center", fontsize=10, color="k", zorder=8)
-
-        lines.append(line1)
-        labels.append('DFT')
-    '''
         
     mlip_path = mlip_forcefit.path  # the points themselves (relative energy)
     mlip_energies = mlip_forcefit.energies
     mlip_fit_path = mlip_forcefit.fit_path  # the fitted interpolation (relative energy)
     mlip_fit_energies = mlip_forcefit.fit_energies
+
     line2, = ax.plot(np.array(mlip_path)+1, mlip_energies, marker='o', 
                      color=mlip_color, linewidth=0, markersize=8, alpha=0.6, zorder=6)
     for x, y in mlip_forcefit.lines:  # force tangent lines
@@ -791,9 +772,8 @@ def plot_final_fitted_path(
 
     lines.append(line2)
     labels.append('MLIP')
-    
-    ax.legend(tuple(lines), tuple(labels), 
-              loc='upper right', fontsize=10, handletextpad=0.3)
+        
+    ax.legend(tuple(lines), tuple(labels), loc='upper right', fontsize=10, handletextpad=0.3) 
     ax.set_xlabel(r'Path ($\mathrm{\AA}$)')
     ax.set_ylabel('Relative energy (eV)')
     ax.grid(True, color='gainsboro', which="major", linestyle="-", linewidth=0.6, alpha=0.5, zorder=1)
@@ -804,10 +784,11 @@ def plot_final_fitted_path(
     energies_for_limits.extend(dft_energies)
     y_min, y_max = np.nanmin(energies_for_limits), np.nanmax(energies_for_limits)
     y_range = y_max - y_min
-    pad_top = 0.10 * y_range if y_range > 0 else 0.2
+    pad_top = 0.20 * y_range if y_range > 0 else 0.2
     ax.set_ylim(bottom=ax.get_ylim()[0], top=y_max + pad_top)
     ax.set_xlim(left=0)
-    
+
+    '''
     ax.text(
         0.02,
         0.95,
@@ -817,12 +798,12 @@ def plot_final_fitted_path(
         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.3", alpha=0.8),
         zorder=10,
     )
+    '''
+
     ax.axhline(y=0, color='lightgrey', linewidth=1, zorder=1)
-    
+
     plt.savefig(f"{folder}_finalfittedpath.png", dpi=300)
     plt.close()
-
-
 
 # ============================== XYZ SNAPSHOTS AND MOVIE ==============================
 def write_structures(folder, traj, n_steps, n_images, maceopt_endpoints):
@@ -909,15 +890,35 @@ def create_movie(folder, n_steps, n_images):
     )
 # ============================== SUMMARY SHEETS AND PLOTS ==============================
 
-def process_summary(base_path, max_steps):
+def process_summary(
+    base_path,
+    max_path_length=None,
+):
     input_file = os.path.join(base_path, "neb_summary.xlsx")
     output_file = os.path.join(base_path, "neb_summary_processed.xlsx")
 
     df = pd.read_excel(input_file)
 
-    # Drop unconverged
-    df = df[df["n_optimization_steps"] != max_steps].reset_index(drop=True)
+    n_before = len(df)
 
+    # Explicit convergence flag filter
+    if "converged" in df.columns:
+        df = df[df["converged"]]
+
+    n_after_conv = len(df)
+
+    # Path length filter
+    if max_path_length is not None and "path_length_A" in df.columns:
+        df = df[df["path_length_A"] <= max_path_length]
+
+    n_after_path = len(df)
+
+    print(
+        f"Filtered summary: "
+        f"{n_before - n_after_conv} unconverged removed, "
+        f"{n_after_conv - n_after_path} path-length outliers removed."
+    )
+    
     # Add parsed columns
     new_cols = ["rxn", "scaffold", "orient", "rxn_type", "halide_type", "halide_ids"]
     df[new_cols] = df["system"].apply(parse_system)
@@ -929,8 +930,9 @@ def process_summary(base_path, max_steps):
         + new_cols
         + df.columns.difference(new_cols, sort=False)[sys_i:].tolist()
     )
-    df = df[ordered]
 
+    df = df[ordered]
+    
     # Sort
     df = df.sort_values(by="barrier_eV", ascending=True, na_position="last").reset_index(drop=True)
 
@@ -944,6 +946,9 @@ def process_summary(base_path, max_steps):
             "halide_ids": "first",
             "barrier_eV": "mean",
             "deltaE_eV": "mean",
+            "path_length_A": "mean",
+            "rmse_eV": "mean",
+            "avg_bias_eV": "mean",
         })
         .sort_values(by="barrier_eV", ascending=True)
         .reset_index(drop=True)
@@ -1050,6 +1055,7 @@ def plot_barriers(
     is_dep   = (data_sorted["rxn_type"] == "deposition").tolist()
 
     fig, ax = plt.subplots(figsize=(11, 11))
+    plt.rcParams.update({'font.size': 16})
     fig.patch.set_facecolor("#ffffff")
     ax.set_facecolor("#f7f7f7")
 
@@ -1093,17 +1099,18 @@ def plot_barriers(
     # Y-axis labels
     ax.set_yticks(y)
     y_labels = [format_reaction_label(rxn) for rxn in data_sorted["rxn"]]
-    ax.set_yticklabels(y_labels, fontfamily="sans-serif")
+    ax.set_yticklabels(y_labels, fontfamily="sans-serif", fontsize=18)
     for tick, dep in zip(ax.get_yticklabels(), is_dep):
         if dep:
             tick.set_fontweight("bold")
     
     # X-axis
-    ax.set_xlabel("Barrier (eV)", fontweight="medium")
+    ax.set_xlabel("Barrier (eV)", fontweight="medium", fontsize=20)
     ax.set_xlim(0, max(barriers) + 0.3)
     ax.set_ylim(-0.6, len(labels) - 0.4)
     ax.xaxis.grid(True, color="#e0e0e0", zorder=0)
     ax.set_axisbelow(True)
+    ax.tick_params(axis='x', labelsize=18)
     
     # Remove top/right spines
     for spine in ["top", "right"]:
@@ -1127,7 +1134,7 @@ def plot_barriers(
     
     # Reflect dataset choice in plot title
     min_or_avg = "Minimums" if use_min else "Averaged"
-    plt.title(f"Summary for {model_name} : Complex barriers | {min_or_avg}", fontsize=14, fontweight="bold", pad=10)
+    plt.title(f"Summary for {model_name} : Complex barriers | {min_or_avg}", fontweight="bold", pad=10)
     model_str = model_name.replace(" ", "_").lower()
     outfile = f"barriers_{model_str}_{min_or_avg.lower()}.pdf"
     plt.savefig(outfile, dpi=200, bbox_inches="tight")
@@ -1148,6 +1155,7 @@ def run_neb_analysis(
     do_write_structures=False,
     do_write_movie=False,
     force_rerun=False,
+    max_path_length=None
 ):
 
     summary_file = os.path.join(base_path, "neb_summary.xlsx")
@@ -1185,6 +1193,20 @@ def run_neb_analysis(
             if rel_dft is not None:
                 rmse, avg_bias = compute_error_metrics(rel_energies, rel_dft)
 
+            # ---------------- FIT NEB PATH ----------------
+            path_length = None
+            forcefit = None
+
+            try:
+                forcefit = fit_images(final_images)
+                path_length = forcefit.path[-1] - forcefit.path[0]
+            except np.linalg.LinAlgError as e:
+                print(
+                    f"WARNING: MLIP fit failed for {folder}: "
+                    f"singular matrix ({e})"
+                )
+
+            # ---------------- RESULTS ----------------
             results.append({
                 "system": os.path.basename(folder),
                 "barrier_eV": barrier,
@@ -1192,25 +1214,48 @@ def run_neb_analysis(
                 "rmse_eV": rmse,
                 "avg_bias_eV": avg_bias,
                 "n_optimization_steps": n_steps - 1,
+                "path_length_A": path_length,
                 "converged": converged,
             })
 
             # ---------------- PLOTS ----------------
             if make_plots:
-                plot_optimization(folder,traj,n_images,barrier,delta_E,max_steps,step_interval)
+                plot_optimization(
+                    folder,
+                    traj,
+                    n_images,
+                    barrier,
+                    delta_E,
+                    max_steps,
+                    step_interval,
+                )
 
-                plot_final_path(folder, rel_energies, barrier, delta_E, rmse, avg_bias, converged=converged, plot_dft=dft_overlay)
-
-                try:
-                    forcefit = fit_images(final_images)
-                except np.linalg.LinAlgError as e:
-                    print(f"WARNING: Skipping MLIP fit for {folder}: singular matrix ({e})")
-                    forcefit = None
+                plot_final_path(
+                    folder,
+                    rel_energies,
+                    barrier,
+                    delta_E,
+                    rmse,
+                    avg_bias,
+                    converged=converged,
+                    plot_dft=dft_overlay,
+                )
 
                 if forcefit is not None:
-                    plot_final_fitted_path(folder,n_images,forcefit,barrier,delta_E,converged=converged,plot_dft=dft_overlay)
+                    plot_final_fitted_path(
+                        folder,
+                        n_images,
+                        forcefit,
+                        barrier,
+                        delta_E,
+                        converged=converged,
+                        plot_dft=dft_overlay,
+                    )
                 else:
-                    print(f"Skipping fitted-path plot for {folder} (no valid forcefit)")
+                    print(
+                        f"Skipping fitted-path plot for {folder} "
+                        "(no valid forcefit)"
+                    )
 
             # ---------------- STRUCTURES AND MOVIES ----------------
             if do_write_structures:
@@ -1219,7 +1264,7 @@ def run_neb_analysis(
             if do_write_movie:
                 create_movie(folder, n_steps, n_images)
 
-# ---------------- EXCEL SUMMARIES ----------------
+    # ---------------- EXCEL SUMMARIES ----------------
         if len(results) > 0:
             df = (pd.DataFrame(results).sort_values("barrier_eV", na_position="last").reset_index(drop=True))
 
@@ -1237,4 +1282,4 @@ def run_neb_analysis(
         print("No summary file found — skipping processing.")
         return
 
-    process_summary(base_path, max_steps)
+    process_summary(base_path, max_path_length=max_path_length)

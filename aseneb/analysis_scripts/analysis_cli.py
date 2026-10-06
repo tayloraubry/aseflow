@@ -22,7 +22,7 @@ def main():
 
     parser.add_argument("--max-steps", type=int, required=True, help="Maximum number of optimization steps to consider for plotting")
 
-    parser.add_argument("--step-interval", type=int, default=5, help="Interval of optimization steps to plot in NEB optimization plot")
+    parser.add_argument("--step-interval", type=int, default=5, help="Interval of optimization steps to plot in NEB optimization plot, default: 5")
 
     parser.add_argument("--no-maceopt", action="store_true", help="Disable endpoint replacement with MACE optimized structures")
 
@@ -40,6 +40,9 @@ def main():
 
     parser.add_argument("--force-rerun", action="store_true", help="Recompute NEB analysis even if neb_summary.xlsx already exists (overwrites existing results).")
 
+    parser.add_argument("--max-path-length", type=float, default=25.0, help="Maximum allowed path length for NEB paths, default: 25.0")
+
+
     args = parser.parse_args()
 
     run_neb_analysis(
@@ -55,6 +58,7 @@ def main():
         do_write_structures=args.write_snapshots,
         do_write_movie=args.create_movie,
         force_rerun=args.force_rerun,
+        max_path_length=args.max_path_length,
     )
 
 

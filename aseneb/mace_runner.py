@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from ase.io import read, write
 from ase.mep import NEB
-from ase.optimize import BFGS, BFGSLineSearch, LBFGS, LBFGSLineSearch, GPMin, MDMin, FIRE
+from ase.optimize import BFGS, BFGSLineSearch, LBFGS, LBFGSLineSearch, GPMin, MDMin, FIRE, FIRE2
 from mace.calculators import MACECalculator
 from aseneb.config import RunConfig
 
@@ -14,6 +14,7 @@ OPTIMIZERS = {
     "GPMin": GPMin,
     "MDMin": MDMin,
     "FIRE": FIRE,
+    "FIRE2": FIRE2,
 }
 
 class MACERunner:

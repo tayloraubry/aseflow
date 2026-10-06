@@ -52,15 +52,14 @@ def collect_directory_images(method_dirs,suffix="finalfittedpath"):
 
         display_method = display_name_for_dir(method_dir)
 
-        for dirpath, _, filenames in os.walk(method_dir):
-            for filename in filenames:
-                if not matches_system(filename,suffix):
-                    continue
+        for filename in os.listdir(method_dir):
+            if not matches_system(filename, suffix):
+                continue
 
-                system_name = os.path.splitext(filename)[0]
-                full_path = os.path.join(dirpath, filename)
+            system_name = os.path.splitext(filename)[0]
+            full_path = os.path.join(method_dir, filename)
 
-                per_method[display_method][system_name] = full_path
+            per_method[display_method][system_name] = full_path
 
     methods = [display_name_for_dir(d) for d in method_dirs]
 
@@ -94,36 +93,33 @@ def collect_sampling_images(directory,suffix="finalfittedpath"):
 
     systems = defaultdict(dict)
 
-    for dirpath, _, filenames in os.walk(directory):
+    for filename in os.listdir(directory):
 
-        for filename in filenames:
+        if not matches_system(filename, suffix):
+            continue
 
-            if not matches_system(filename, suffix):
-                continue
+        stem = os.path.splitext(filename)[0]
 
-            stem = os.path.splitext(filename)[0]
+        if suffix:
+            stem = stem.removesuffix(suffix)
 
-            if suffix:
-                stem = stem.removesuffix(suffix)
+        match = SAMPLING_PATTERN.match(stem)
 
+        if match is None:
+            continue
 
-            match = SAMPLING_PATTERN.match(stem)
+        reactant, samp1, product, samp2 = match.groups()
 
-            if match is None:
-                continue
+        # Safety check
+        if samp1 != samp2:
+            continue
 
-            reactant, samp1, product, samp2 = match.groups()
+        system_name = f"{reactant}_TO_{product}"
 
-            # Safety check
-            if samp1 != samp2:
-                continue
-
-            system_name = f"{reactant}_TO_{product}"
-
-            systems[system_name][samp1] = os.path.join(
-                dirpath,
-                filename
-            )
+        systems[system_name][samp1] = os.path.join(
+            directory,
+            filename
+        )
 
     # Keep only complete c/d/dr/r sets
     complete_systems = {}
@@ -138,6 +134,34 @@ def collect_sampling_images(directory,suffix="finalfittedpath"):
             }
 
     return SAMPLINGS, complete_systems
+
+
+# ==========================================================
+# Mode 3: Show all matching images from one directory
+# ==========================================================
+
+def collect_all_images(directory, suffix="finalfittedpath"):
+
+    method_name = display_name_for_dir(directory)
+    systems = {}
+
+    for filename in sorted(os.listdir(directory)):
+
+        if not matches_system(filename, suffix):
+            continue
+
+        stem = os.path.splitext(filename)[0]
+
+        if suffix:
+            system_name = stem.removesuffix(suffix)
+        else:
+            system_name = stem
+
+        systems[system_name] = {
+            method_name: os.path.join(directory, filename)
+        }
+
+    return [method_name], systems
 
 
 # ==========================================================
@@ -157,7 +181,7 @@ def render_pdf(
 
     if not system_names:
         raise SystemExit(
-            "No complete image sets found."
+            "No matching image sets found."
         )
 
     with PdfPages(output_path) as pdf:
@@ -186,8 +210,12 @@ def render_pdf(
                 constrained_layout=True,
             )
 
-            if nrows == 1:
+            if nrows == 1 and len(methods) == 1:
+                axes = [[axes]]
+            elif nrows == 1:
                 axes = [axes]
+            elif len(methods) == 1:
+                axes = [[ax] for ax in axes]
 
             for row_idx, system_name in enumerate(page_names):
 
@@ -264,7 +292,8 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "If one directory is supplied, compare "
-            "c/d/dr/r samplings. If multiple "
+            "c/d/dr/r samplings or render all matching "
+            "images in a single column. If multiple "
             "directories are supplied, compare "
             "directories."
         )
@@ -274,9 +303,20 @@ def main():
         "dirs",
         nargs="+",
         help=(
-            "One directory (sampling comparison) "
-            "or multiple directories "
+            "One directory (sampling comparison or "
+            "single-column render) or multiple directories "
             "(directory comparison)."
+        ),
+    )
+
+    parser.add_argument(
+        "--single-dir-mode",
+        choices=["sampling", "all"],
+        default="sampling",
+        help=(
+            "Behavior when one directory is supplied: "
+            "'sampling' compares c/d/dr/r image sets, "
+            "'all' renders every matching image in one column."
         ),
     )
 
@@ -334,15 +374,23 @@ def main():
 
     if len(args.dirs) == 1:
 
-        print(
-            f"Sampling comparison mode: "
-            f"{args.dirs[0]}"
-        )
+        resolved = str(Path(args.dirs[0]).resolve())
 
-        methods, systems = collect_sampling_images(
-            args.dirs[0],
-            suffix=args.suffix
-        )
+        if args.single_dir_mode == "sampling":
+            print(f"Sampling comparison mode: {resolved}")
+
+            methods, systems = collect_sampling_images(
+                args.dirs[0],
+                suffix=args.suffix
+            )
+
+        else:
+            print(f"Single-column image mode: {resolved}")
+
+            methods, systems = collect_all_images(
+                args.dirs[0],
+                suffix=args.suffix
+            )
 
     else:
 
@@ -351,7 +399,7 @@ def main():
         )
 
         for d in args.dirs:
-            print(f"  {d}")
+            print(f"  {Path(d).resolve()}")
 
         methods, systems = collect_directory_images(
             args.dirs,
